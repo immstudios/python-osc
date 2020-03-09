@@ -1,6 +1,10 @@
 """UDP Clients for sending OSC messages to an OSC server"""
 
-from collections import Iterable
+try:
+    from collections.abc import Iterable
+except ImportError: # python 3.5
+    from collections import Iterable
+    
 import socket
 
 from .osc_message_builder import OscMessageBuilder
@@ -24,7 +28,15 @@ class UDPClient(object):
             port: Port of server
             allow_broadcast: Allow for broadcast transmissions
         """
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        for addr in socket.getaddrinfo(address, port, type=socket.SOCK_DGRAM):
+            af, socktype, protocol, canonname, sa = addr
+
+            try:
+                self._sock = socket.socket(af, socktype)
+            except OSError:
+                continue
+            break
+
         self._sock.setblocking(0)
         if allow_broadcast:
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -51,7 +63,9 @@ class SimpleUDPClient(UDPClient):
             value: One or more arguments to be added to the message
         """
         builder = OscMessageBuilder(address=address)
-        if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
+        if value is None:
+            values = []
+        elif not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
             values = [value]
         else:
             values = value
